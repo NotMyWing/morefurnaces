@@ -85,8 +85,17 @@ processResources
 
 def run = { command ->
     def process = command.execute()
-    process.waitFor()
-    return process.text.trim()
+    def outputStream = new StringBuffer();
+    def errorStream = new StringBuffer();
+    process.waitForProcessOutput(outputStream, errorStream)
+
+    errorStream.toString().with {
+        if (it) {
+            throw new GradleException("Error executing ${command}:\n> ${it}")
+        }
+    }
+    
+    return outputStream.toString().trim()
 }
 
 task ciRewriteVersion {
@@ -123,13 +132,20 @@ task generateChangelog {
             run("git describe --abbrev=0 --tags `git rev-list --tags --skip=1 --max-count=1`")
             : run("git describe --abbrev=0 --tags")
         
-        def changelog = "Changes since ${lastTag}:"
-        changelog += "\n"
-        changelog += ("\n" + run("git log --date=format:\"%d %b %Y\" --pretty=\"%s - **%an** (%ad)\" ${lastTag}..HEAD"))
-            .replaceAll("\n", "\r\n• ")
+        def changelog = (run([
+            "git"
+            , "log"
+            , "--date=format:%d %b %Y"
+            , "--pretty=%s - **%an** (%ad)"
+            , "${lastTag}..HEAD"
+        ]))
+        
+        if (changelog) {
+            changelog = "Changes since ${lastTag}:\n${("\n" + changelog).replaceAll("\n", "\r\n• ")}"
+        }
 
         def f = new File("build/tmp/changelog.md")
-        f.write(changelog + "\n", "UTF-8")
+        f.write(changelog ?: "", "UTF-8")
     }
 }
 
