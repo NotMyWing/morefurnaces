@@ -91,11 +91,11 @@ def run = { command ->
 
 task ciRewriteVersion {
 	onlyIf {
-        System.env['TRAVIS'] != null
+        System.env['TRAVIS']
     }
 
     doLast {
-        if (System.env['TRAVIS_TAG'] != null) {
+        if (System.env['TRAVIS_TAG']) {
             if (System.env['TRAVIS_TAG'] != project.version) {
                 throw new GradleException("Invalid git tag. Expected "
                     + "${project.version}, got ${System.env["TRAVIS_TAG"]}"
