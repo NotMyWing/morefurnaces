@@ -110,7 +110,31 @@ task ciRewriteVersion {
     }
 }
 
+task generateChangelog {
+    onlyIf {
+        System.env['TRAVIS']
+    }
+
+    doLast {
+        /*
+            Create a comprehensive changelog.
+         */
+        def lastTag = System.env['TRAVIS_TAG'] ?
+            run("git describe --abbrev=0 --tags `git rev-list --tags --skip=1 --max-count=1`")
+            : run("git describe --abbrev=0 --tags")
+        
+        def changelog = "Changes since ${lastTag}:"
+        changelog += "\n"
+        changelog += ("\n" + run("git log --date=format:\"%d %b %Y\" --pretty=\"%s - **%an** (%ad)\" ${lastTag}..HEAD"))
+            .replaceAll("\n", "\r\n• ")
+
+        def f = new File("build/tmp/changelog.md")
+        f.write(changelog + "\n", "UTF-8")
+    }
+}
+
 jar.dependsOn ciRewriteVersion
+jar.dependsOn generateChangelog
 
 task deployCurseForge {
     dependsOn ciRewriteVersion
@@ -178,28 +202,14 @@ task deployCurseForge {
         }
 
         /*
-            Create a comprehensive changelog.
-         */
-        def final createChangeLog = {
-            def lastTag = System.env['TRAVIS_TAG'] ?
-                run("git describe --abbrev=0 --tags `git rev-list --tags --skip=1 --max-count=1`")
-                : run("git describe --abbrev=0 --tags")
-            
-            def log = "Changes since ${lastTag}:"
-            log += "\n"
-            log += ("\n" + run("git log --date=format:\"%d %b %Y\" --pretty=\"%s - **%an** (%ad)\" ${lastTag}..HEAD"))
-                .replaceAll("\n", "\r\n• ")
-
-            return log
-        }
-
-        /*
             Fill the papers for CurseForge.
          */
         def metadata = new groovy.json.JsonBuilder().with {
             def versions = [ version.id ]
+            def log = new File("build/tmp/changelog.md").getText("UTF-8")
+            
             def root = it {
-                changelog createChangeLog()
+                changelog log
                 changelogType "markdown"
 
                 releaseType System.env['TRAVIS_TAG'] ? "release" : "beta"
