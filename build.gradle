@@ -223,7 +223,7 @@ task deployCurseForge {
 
             req.entity = new MultipartEntityBuilder().with {
                 addPart("file", new FileBody(
-                    new File("${project.jar.destinationDir}\\${project.jar.archiveName}")
+                    new File("${project.jar.destinationDir}/${project.jar.archiveName}")
                 ))
                 addPart("metadata", new StringBody(metadata))
 
