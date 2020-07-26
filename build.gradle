@@ -123,7 +123,7 @@ task deployCurseForge {
          */
         def final checkVariables = { variables -> 
             for (vari in variables) {
-                if (System.env[vari] == null) {
+                if (!System.env[vari]) {
                     throw new GradleException("Environmental variable ${vari} is unset")
                 }
             }
