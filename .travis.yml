@@ -8,3 +8,30 @@ cache:
     - $HOME/.gradle/caches/
     - $HOME/.gradle/wrapper/
     - ./build/tmp/
+
+deploy:
+  # Deploy release to CurseForge
+  - provider: script
+    edge: true
+    skip_cleanup: true
+    script: ./gradlew deployCurseForge
+    on:
+      tags: true
+  
+  # Deploy release to GitHub (pre-release)
+  - provider: releases
+    skip_cleanup: true
+    file_glob: true
+    file: build/libs/**/*
+    prerelease: true
+    on:
+      tags: false
+
+  # Deploy release to GitHub (release)
+  - provider: releases
+    skip_cleanup: true
+    file_glob: true
+    file: build/libs/**/*
+    on:
+      tags: true
+      condition: -z "$TRAVIS_TAG"
