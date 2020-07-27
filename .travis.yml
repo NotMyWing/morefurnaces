@@ -18,6 +18,9 @@ deploy:
     edge: true
     skip_cleanup: true
     script: ./gradlew deployCurseForge
+    on:
+      all_branches: true
+      condition: $TRAVIS_BRANCH =~ ^(master|[0-9]+\.[0-9]+\.[0-9]+.*?)$
 
   # Deploy release to GitHub (release)
   - provider: releases
@@ -27,6 +30,6 @@ deploy:
     file: build/libs/**/*
     token: "$GITHUB_TOKEN"
     release_notes_file: build/tmp/changelog.md
+    overwrite: true
     on:
       tags: true
-      condition: -z "$TRAVIS_TAG"
