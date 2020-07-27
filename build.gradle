@@ -27,7 +27,7 @@ apply plugin: 'net.minecraftforge.gradle.forge'
 
 version = "1.10.7"
 group = "omnifactorydevs.morefurnaces" // http://maven.apache.org/guides/mini/guide-naming-conventions.html
-archivesBaseName = "MoreFurnaces Omnifactory Edition"
+archivesBaseName = "MoreFurnaces-Omnifactory-Edition"
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
@@ -38,7 +38,11 @@ minecraft {
     mappings = "snapshot_20171003"
     makeObfSourceJar = false
 
-    replace "GRADLE:VERSION", project.version
+    replace "GRADLE:VERSION", getRewrittenVersion()
+}
+
+jar {
+    version = "${project.minecraft.version}-${getRewrittenVersion()}"
 }
 
 repositories {
@@ -65,7 +69,7 @@ dependencies {
 processResources
 {
     // this will ensure that this task is redone when the versions change.
-    inputs.property "version", project.version
+    inputs.property "version", getRewrittenVersion()
     inputs.property "mcversion", project.minecraft.version
 
     // replace stuff in mcmod.info, nothing else
@@ -73,7 +77,7 @@ processResources
         include 'mcmod.info'
 
         // replace version and mcversion
-        expand 'version':project.version, 'mcversion':project.minecraft.version
+        expand 'version': getRewrittenVersion(), 'mcversion': project.minecraft.version
     }
 
     // copy everything else, thats not the mcmod.info
@@ -146,7 +150,7 @@ task generateChangelog {
         ]))
         
         if (changelog) {
-            changelog = "Changes since ${lastTag}:\n${("\n" + changelog).replaceAll("\n", "\r\n• ")}"
+            changelog = "Changes since ${lastTag}:\n${("\n" + changelog).replaceAll("\n", "\n• ")}"
         }
 
         def f = new File("build/tmp/changelog.md")
@@ -196,27 +200,17 @@ task deployCurseForge {
             } else {
                 throw new GradleException("Fetch failed with code ${code} (${url})")
             }
-        }
-
-        /*
-            Parse the version slug.
-         */
-        def parsedMinecraftSlug = (minecraft.version =~ /^(.+)-(.+)$/).with {
-            if (size() == 0) {
-                throw new GradleException("Couldn't parse the Minecraft version slug: ${project.version}")
-            }
-
-            return it.findAll()[0]
-        }
+        }        
  
         /*
             Fetch the list of Minecraft versions from CurseForge.
          */
+        def targetVersion = project.minecraft.version
         def version = fetch(CURSEFORGE_ENDPOINT + "api/game/versions").with {
-            def v = it.find { it.name == parsedMinecraftSlug[1] }
+            def v = it.find { it.name == targetVersion }
 
             if (!v) {
-                throw new GradleException("Version ${parsedMinecraftSlug[1]} not found on CurseForge.")
+                throw new GradleException("Version ${project.minecraft.version} not found on CurseForge")
             }
 
             return v
@@ -246,7 +240,6 @@ task deployCurseForge {
         /*
             Upload the artifact to CurseForge.
          */
-
         new HTTPBuilder(CURSEFORGE_ENDPOINT).request(Method.POST) { req ->
             requestContentType = "multipart/form-data"
             headers["X-Api-Token"] = System.env["CURSEFORGE_API_TOKEN"]
