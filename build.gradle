@@ -222,16 +222,15 @@ task deployCurseForge {
         def metadata = new groovy.json.JsonBuilder().with {
             def versions = [ version.id ]
 
-            // CurseForge is dumb, so we'll have to convert all
-            // newlines to paragraphs. Not the prettiest approach, but it works.
+            // CurseForge is dumb, so we'll have to prepend two spaces
+            // to each newline. This is disgusting, but it works.
             def log = new File("build/tmp/changelog.md")
                 .getText("UTF-8")
-                .replaceAll(/(?m)^(.*)$/, '<p>$1</p>')
-                .replaceAll("\n", "")
+                .replaceAll("\n", "  \n")
             
             def root = it {
                 changelog log
-                changelogType "html"
+                changelogType "markdown"
 
                 releaseType System.env['TRAVIS_TAG'] ? "release" : "beta"
                 gameVersions versions
