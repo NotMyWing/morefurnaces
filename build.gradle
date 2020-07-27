@@ -60,7 +60,6 @@ dependencies {
     runtime 'cxlibrary:cxlibrary:1.12.1:1.6.1'
 
     runtime "mezz.jei:jei_1.12.2:4.15.0.293"
-
 }
 
 processResources
@@ -83,7 +82,7 @@ processResources
     }
 }
 
-def run = { command ->
+def run(command) {
     def process = command.execute()
     def outputStream = new StringBuffer();
     def errorStream = new StringBuffer();
@@ -98,24 +97,30 @@ def run = { command ->
     return outputStream.toString().trim()
 }
 
+def getRewrittenVersion () {
+    if (System.env['TRAVIS_TAG']) {
+        if (System.env['TRAVIS_TAG'] != project.version) {
+            throw new GradleException("Invalid git tag. Expected "
+                + "${project.version}, got ${System.env["TRAVIS_TAG"]}"
+            )
+        }
+
+        return project.version
+    } else {
+        def lastTag = run "git describe --abbrev=0 --tags"
+        def commitNo = run "git rev-list ${lastTag}..HEAD --count"
+
+        return project.version + "." + commitNo
+    }
+}
+
 task ciRewriteVersion {
 	onlyIf {
         System.env['TRAVIS']
     }
 
-    doLast {
-        if (System.env['TRAVIS_TAG']) {
-            if (System.env['TRAVIS_TAG'] != project.version) {
-                throw new GradleException("Invalid git tag. Expected "
-                    + "${project.version}, got ${System.env["TRAVIS_TAG"]}"
-                )
-            }
-        } else {
-            def lastTag = run "git describe --abbrev=0 --tags"
-            def commitNo = run "git rev-list ${lastTag}..HEAD --count"
-
-            project.version += "." + commitNo
-        }
+    doFirst {
+        project.version = getRewrittenVersion()
     }
 }
 
@@ -149,8 +154,8 @@ task generateChangelog {
     }
 }
 
-jar.dependsOn ciRewriteVersion
-jar.dependsOn generateChangelog
+compileJava.dependsOn ciRewriteVersion
+compileJava.dependsOn generateChangelog
 
 task deployCurseForge {
     dependsOn ciRewriteVersion
@@ -196,9 +201,9 @@ task deployCurseForge {
         /*
             Parse the version slug.
          */
-        def parsedSlug = (project.version =~ /^(.+)-(.+)$/).with {
+        def parsedMinecraftSlug = (minecraft.version =~ /^(.+)-(.+)$/).with {
             if (size() == 0) {
-                throw new GradleException("Couldn't parse the version slug: ${project.version}")
+                throw new GradleException("Couldn't parse the Minecraft version slug: ${project.version}")
             }
 
             return it.findAll()[0]
@@ -208,10 +213,10 @@ task deployCurseForge {
             Fetch the list of Minecraft versions from CurseForge.
          */
         def version = fetch(CURSEFORGE_ENDPOINT + "api/game/versions").with {
-            def v = it.find { it.name == parsedSlug[1] }
+            def v = it.find { it.name == parsedMinecraftSlug[1] }
 
             if (!v) {
-                throw new GradleException("Version ${parsedSlug[1]} not found on CurseForge.")
+                throw new GradleException("Version ${parsedMinecraftSlug[1]} not found on CurseForge.")
             }
 
             return v
@@ -232,7 +237,7 @@ task deployCurseForge {
                 gameVersions versions
 
                 // Defined in gradle.properties
-                displayName "${curseforge_fancyArtifactName} ${parsedSlug[2]} for ${parsedSlug[1]}"
+                displayName "${curseforge_fancyArtifactName} ${project.version}"
             }
 
             return it.toString()
