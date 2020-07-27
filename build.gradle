@@ -1,7 +1,6 @@
 import java.util.regex.Pattern
 import groovy.json.JsonSlurper
 
-import org.apache.http.entity.mime.MultipartEntity;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.entity.mime.content.FileBody;
 import org.apache.http.entity.mime.content.StringBody;
@@ -25,9 +24,9 @@ apply plugin: 'net.minecraftforge.gradle.forge'
 
 //Only edit below this line, the above code adds and enables the nessasary things for Forge to be setup.
 
-version = "1.10.7"
 group = "omnifactorydevs.morefurnaces" // http://maven.apache.org/guides/mini/guide-naming-conventions.html
-archivesBaseName = "MoreFurnaces-Omnifactory-Edition"
+version = getRewrittenVersion()
+archivesBaseName = project_artifact_name
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
@@ -38,11 +37,12 @@ minecraft {
     mappings = "snapshot_20171003"
     makeObfSourceJar = false
 
-    replace "GRADLE:VERSION", getRewrittenVersion()
+    replace "GRADLE:VERSION", project.version
+    replace "GRADLE:MODNAME", project_fancy_name
 }
 
 jar {
-    version = "${project.minecraft.version}-${getRewrittenVersion()}"
+    version = "${project.minecraft.version}-${project.version}"
 }
 
 repositories {
@@ -69,7 +69,7 @@ dependencies {
 processResources
 {
     // this will ensure that this task is redone when the versions change.
-    inputs.property "version", getRewrittenVersion()
+    inputs.property "version", project.version
     inputs.property "mcversion", project.minecraft.version
 
     // replace stuff in mcmod.info, nothing else
@@ -77,7 +77,7 @@ processResources
         include 'mcmod.info'
 
         // replace version and mcversion
-        expand 'version': getRewrittenVersion(), 'mcversion': project.minecraft.version
+        expand 'version': project.version, 'mcversion': project.minecraft.version
     }
 
     // copy everything else, thats not the mcmod.info
@@ -86,6 +86,18 @@ processResources
     }
 }
 
+/*
+    Fetches the last tag associated with the current branch.
+ */
+def getLastTag() {
+    System.env['TRAVIS_TAG'] ?
+        run("git describe --abbrev=0 --tags `git rev-list --tags --skip=1 --max-count=1`")
+        : run("git describe --abbrev=0 --tags")
+}
+
+/*
+    Runs a command and returns the output.
+ */
 def run(command) {
     def process = command.execute()
     def outputStream = new StringBuffer();
@@ -101,30 +113,24 @@ def run(command) {
     return outputStream.toString().trim()
 }
 
+/*
+    Rewrites the version.
+ */
 def getRewrittenVersion () {
+    def lastTag = getLastTag()
+
     if (System.env['TRAVIS_TAG']) {
-        if (System.env['TRAVIS_TAG'] != project.version) {
+        if (System.env['TRAVIS_TAG'] != lastTag) {
             throw new GradleException("Invalid git tag. Expected "
-                + "${project.version}, got ${System.env["TRAVIS_TAG"]}"
+                + "${lastTag}, got ${System.env["TRAVIS_TAG"]}"
             )
         }
 
-        return project.version
+        return lastTag
     } else {
-        def lastTag = run "git describe --abbrev=0 --tags"
         def commitNo = run "git rev-list ${lastTag}..HEAD --count"
 
-        return project.version + "." + commitNo
-    }
-}
-
-task ciRewriteVersion {
-	onlyIf {
-        System.env['TRAVIS']
-    }
-
-    doFirst {
-        project.version = getRewrittenVersion()
+        return lastTag + "." + commitNo
     }
 }
 
@@ -137,9 +143,7 @@ task generateChangelog {
         /*
             Create a comprehensive changelog.
          */
-        def lastTag = System.env['TRAVIS_TAG'] ?
-            run("git describe --abbrev=0 --tags `git rev-list --tags --skip=1 --max-count=1`")
-            : run("git describe --abbrev=0 --tags")
+        def lastTag = getLastTag()
         
         def changelog = (run([
             "git"
@@ -158,12 +162,9 @@ task generateChangelog {
     }
 }
 
-compileJava.dependsOn ciRewriteVersion
 compileJava.dependsOn generateChangelog
 
 task deployCurseForge {
-    dependsOn ciRewriteVersion
-
     doLast {
         def final CURSEFORGE_ENDPOINT = "https://minecraft.curseforge.com/"
 
@@ -222,8 +223,10 @@ task deployCurseForge {
         def metadata = new groovy.json.JsonBuilder().with {
             def versions = [ version.id ]
 
-            // CurseForge is dumb, so we'll have to prepend two spaces
-            // to each newline. This is disgusting, but it works.
+            /*
+                CurseForge is dumb, so we'll have to prepend two spaces
+                to each newline. This is disgusting, but it works.
+            */
             def log = new File("build/tmp/changelog.md")
                 .getText("UTF-8")
                 .replaceAll("\n", "  \n")
